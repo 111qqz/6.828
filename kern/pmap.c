@@ -37,7 +37,9 @@ i386_detect_memory(void)
 	// Use CMOS calls to measure available base & extended memory.
 	// (CMOS calls return results in kilobytes.)
 	basemem = nvram_read(NVRAM_BASELO);
+	// basemem就是0-640k之间的部分
 	extmem = nvram_read(NVRAM_EXTLO);
+	// extmem 就是 1MB往上的
 	ext16mem = nvram_read(NVRAM_EXT16LO) * 64;
 
 	// Calculate the number of physical pages available in both base
@@ -92,9 +94,11 @@ boot_alloc(uint32_t n)
 	// which points to the end of the kernel's bss segment:
 	// the first virtual address that the linker did *not* assign
 	// to any kernel code or global variables.
+	// end 就是虚拟地址的初始位置
 	if (!nextfree) {
 		extern char end[];
 		nextfree = ROUNDUP((char *) end, PGSIZE);
+		cprintf("end:%08x nextfree:%08x\n",end,nextfree);
 	}
 
 	// Allocate a chunk large enough to hold 'n' bytes, then update
@@ -102,8 +106,18 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
+	cprintf("boot_alloc!\n");
+	if ( 0 == n) return nextfree;
 
-	return NULL;
+	nextfree = ROUNDUP((char *)(nextfree+n),PGSIZE);
+	//uint32_t x = (uint32_t)nextfree;
+	// cprintf("nextfree :%08x\n",x);
+	if ((uint32_t)nextfree>(KERNBASE+npages*PGSIZE))
+	{
+		panic("boot_alloc: there is no enough space\n");
+	}
+
+	return nextfree;
 }
 
 // Set up a two-level page table:
@@ -125,7 +139,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
+	// panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
