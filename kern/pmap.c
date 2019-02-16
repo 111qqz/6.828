@@ -123,7 +123,7 @@ boot_alloc(uint32_t n)
 // Set up a two-level page table:
 //    kern_pgdir is its linear (virtual) address of the root
 //
-// This function only sets up the kernel part of the address space
+// This function only sets up the kerneil part of the address space
 // (ie. addresses >= UTOP).  The user part of the address space
 // will be set up later.
 //
@@ -162,6 +162,10 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
+	pages = (struct PageInfo *)boot_alloc(sizeof(struct PageInfo)*npages);
+	memset(pages,0,sizeof(struct PageInfo)*npages);
+	cprintf("page_info_end_VA:%08x\n",pages+sizeof(struct PageInfo)*npages);
+	
 
 
 	//////////////////////////////////////////////////////////////////////
@@ -262,15 +266,38 @@ page_init(void)
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
 	//
+	//
+	//   [EXTPHYSMEM,...)中，最开始是kernel,然后是分配给了page_dir,接着是npages个struct PageInfo.
+	//   这之后的空间应该都是free的
+	//
 	// Change the code to reflect this.
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	size_t i;
-	for (i = 0; i < npages; i++) {
+	cprintf("page_free_list:%08x\n",page_free_list);
+	// 倒序的？
+	//
+	pages[0].pp_ref = 1;
+	pages[0].pp_link = page_free_list; // null
+	for (i = 1; i < npages_basemem; i++) {
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
 	}
+	int npages_extmem = EXTPHYSMEM/PGSIZE;
+	int npages_freeextmem = ((uint32_t)(struct PageInfo *)(pages + npages)-KERNBASE)/PGSIZE;
+	for ( int i = npages_freeextmem ; i < npages ; i++)
+	{
+		pages[i].pp_ref = 0 ;
+		pages[i].pp_link = page_free_list;
+		page_free_list = &pages[i];
+	}
+	// debug
+	cprintf("EXTPHYSMEM:%08x\n",EXTPHYSMEM);
+	cprintf("npages:%d\n",npages);
+	cprintf("npages_IO:%d\n",IOPHYSMEM/PGSIZE);
+	cprintf("npages_extmem:%d npages_freeextmem:%d \n",npages_extmem,npages_freeextmem);
+	cprintf("npages_extmem_VA:%08x\n",page2kva(&pages[npages_extmem]));
 }
 
 //
@@ -288,8 +315,17 @@ page_init(void)
 struct PageInfo *
 page_alloc(int alloc_flags)
 {
-	// Fill this function in
-	return 0;
+	if (!page_free_list) return NULL;
+	struct PageInfo* ret = page_free_list;
+	page_free_list = page_free_list->pp_link;
+	ret -> pp_link = NULL;
+	memset(page2kva(ret),0,PGSIZE);
+	if (alloc_flags & ALLOC_ZERO)
+	{
+		memset(page2kva(ret),'\0',PGSIZE);
+	}
+	// cprintf("ret:%08x\n",ret);
+	return ret;
 }
 
 //
@@ -302,6 +338,14 @@ page_free(struct PageInfo *pp)
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
+	if (pp->pp_ref!=0 || pp->pp_link)
+	{
+		panic("page_free: pp_ref is nonzero or pp_link is not NULL");
+	}
+	// how to return something in a void function?
+	// 相当于在链表头插入一个节点
+	pp->pp_link = page_free_list;
+	page_free_list = pp ;
 }
 
 //
@@ -551,6 +595,7 @@ check_page_alloc(void)
 	assert(!page_alloc(0));
 
 	// free and re-allocate?
+	cprintf("free & re-allocate begin\n");
 	page_free(pp0);
 	page_free(pp1);
 	page_free(pp2);
@@ -564,6 +609,7 @@ check_page_alloc(void)
 	assert(!page_alloc(0));
 
 	// test flags
+	cprintf("test_flags begin\n");
 	memset(page2kva(pp0), 1, PGSIZE);
 	page_free(pp0);
 	assert((pp = page_alloc(ALLOC_ZERO)));
