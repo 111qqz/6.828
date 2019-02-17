@@ -285,7 +285,7 @@ page_init(void)
 		page_free_list = &pages[i];
 	}
 	int npages_extmem = EXTPHYSMEM/PGSIZE;
-	int npages_freeextmem = ((uint32_t)(struct PageInfo *)(pages + npages)-KERNBASE)/PGSIZE;
+	int npages_freeextmem = PADDR((struct PageInfo *)(pages + npages))/PGSIZE;
 	for ( int i = npages_freeextmem ; i < npages ; i++)
 	{
 		pages[i].pp_ref = 0 ;
