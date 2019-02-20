@@ -443,14 +443,12 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
 	physaddr_t pa = page2pa(pp);
-	pte_t *entry = pgdir_walk(pgdir,va,1);
-	if (!entry)
-	{
-		return -E_NO_MEM;
-		// 我服了。。错误码还带符号的。。。
-	}
+	//pte_t *entry = pgdir_walk(pgdir,va,1);
+	pte_t *entry;
+	struct PageInfo * pginfo = page_lookup(pgdir,va,&entry);	
 	bool exist = *entry & PTE_P;
-	if (exist)
+	cprintf("*entry %08x exist %d pginfo %08x\n",*entry,exist,pginfo);
+	if (pginfo!=NULL)
 	{
 		if (PTE_ADDR(*entry)== pa)
 		{
@@ -461,6 +459,12 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 		{
 			page_remove(pgdir,va);
 		}
+	}
+	entry = pgdir_walk(pgdir,va,1);
+	if (entry)
+	{
+		return -E_NO_MEM;
+		// 我服了。。错误码还带符号的。。。
 	}
 	*entry = pa | perm | PTE_P;
 	pp->pp_ref++;
@@ -486,11 +490,15 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 	// Fill this function in
 	pte_t * entry = pgdir_walk( pgdir, va, 0);
 	if (!entry) return NULL;
-	physaddr_t pa = PTE_ADDR(*entry);
 	if (pte_store)
 	{
 		*pte_store =  entry;
 	}
+	bool exist = *entry & PTE_P;
+	if (!exist) return NULL;
+
+	physaddr_t pa = PTE_ADDR(*entry);
+	cprintf("pa in lookup: %08x\n",pa);
 	struct PageInfo* ret = pa2page(pa);
 	return ret;
 }
@@ -675,6 +683,7 @@ check_kern_pgdir(void)
 	pgdir = kern_pgdir;
 	// check pages array
 	n = ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE);
+	cprintf("UPAGES:%08x\n",UPAGES);
 	for (i = 0; i < n; i += PGSIZE)
 	{
 		cprintf("%d ***VS***%d\n",check_va2pa(pgdir,UPAGES+i),PADDR(pages)+i);
@@ -714,18 +723,18 @@ static physaddr_t
 check_va2pa(pde_t *pgdir, uintptr_t va)
 {
 	pte_t *p;
-	//cprintf("va in check_va2pa:%08x\n",va);
-	//cprintf("PDX:%d PTX:%d\n",PDX(va),PTX(va));
+	cprintf("va in check_va2pa:%08x\n",va);
+	cprintf("PDX:%d PTX:%d\n",PDX(va),PTX(va));
 	pgdir = &pgdir[PDX(va)];
 	if (!(*pgdir & PTE_P))
 		return ~0;
-	//cprintf(" page table entry not exist \n");
+	cprintf(" page table entry not exist \n");
 	p = (pte_t*) KADDR(PTE_ADDR(*pgdir));
-	//cprintf("p[PTX(va)]:%08x\n",p[PTX(va)]);
+	cprintf("p[PTX(va)]:%08x\n",p[PTX(va)]);
 	if (!(p[PTX(va)] & PTE_P))
 		return ~0;
 	physaddr_t ret = PTE_ADDR(p[PTX(va)]);
-	//cprintf("pa in check_va2pa:%08x\n",ret);
+	cprintf("pa in check_va2pa:%08x\n",ret);
 	return PTE_ADDR(p[PTX(va)]);
 }
 // check page_insert, page_remove, &c
