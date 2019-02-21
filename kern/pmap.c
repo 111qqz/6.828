@@ -461,7 +461,7 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 		}
 	}
 	entry = pgdir_walk(pgdir,va,1);
-	if (entry)
+	if (!entry)
 	{
 		return -E_NO_MEM;
 		// 我服了。。错误码还带符号的。。。
