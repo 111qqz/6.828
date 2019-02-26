@@ -232,7 +232,19 @@ mon_clearPTE_U(int argc, char **argv, struct Trapframe *tf)
 int
 mon_change_flags(int argc, char **argv, struct Trapframe *tf)
 {
-	return 1;
+	char *sVA = argv[1];
+	char *sPer = argv[2];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	int Per = strtol(sPer,NULL,10);
+	//cprintf("Permission:%d\n",Per);
+	pte_t *entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry =( (*entry) & (~0x7) ) | Per;
+	return 0;
 }
 /***** Kernel monitor command interpreter *****/
 
