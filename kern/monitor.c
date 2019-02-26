@@ -26,7 +26,14 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{"backtrace","Display infomation about the call stack", mon_backtrace },
-	{"map"," display the physical mappings that apply to a particular range of virtual addresses",mon_showmappings}
+	{"map"," display the physical mappings that apply to a particular range of virtual addresses",mon_showmappings},
+	{"setPTE_P","set the flag of PTE_P",mon_setPTE_P},
+	{"clearPTE_P","clear the flag of PTE_P",mon_clearPTE_P},
+	{"setPTE_W","set the flag of PTE_W",mon_setPTE_W},
+	{"clearPTE_W","clear the flag of PTE_W",mon_clearPTE_W},
+	{"setPTE_U","set the flag of PTE_U",mon_setPTE_U},
+	{"clearPTE_U","clear the flag of PTE_U",mon_clearPTE_U},
+	{"change_flags","change the permission",mon_change_flags},
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -101,7 +108,7 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 	//cprintf("int: [%08x,%08x]\n",istartVA,iendVA);
 	int cnt = ((iendVA - istartVA)>>12)&0xFFFFFF;
 	//cprintf("cnt %d\n",cnt);
-	//cprintf("virtual address   phycisal address  PTE_U  PTE_W  PTE_P\n");
+	cprintf("virtual address   phycisal address  PTE_U  PTE_W  PTE_P\n");
 	for ( int i = 0 ; i < cnt ; i++)
 	{
 		uintptr_t curVA = istartVA + i * 0x1000;
@@ -125,8 +132,108 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+int
+mon_setPTE_P(int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry = *entry | PTE_P;
+	return 0;
+}
+int
+mon_clearPTE_P(int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	cprintf("entry %08x\n",*entry);
+	cprintf(" PTE_p %08x\n",(~PTE_P));
+	 *entry = (*entry) & (~PTE_P);
+	cprintf("entry %08x\n",*entry);
+	return 0;
+}
 
+	
 
+int
+mon_setPTE_W (int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry = *entry | PTE_W;
+	return 0;
+
+}
+
+int
+mon_clearPTE_W(int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry = (*entry) & (~PTE_W);
+	return 0;
+
+}
+
+int
+mon_setPTE_U(int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry = *entry | PTE_U;
+	return 0;
+
+}
+int
+mon_clearPTE_U(int argc, char **argv, struct Trapframe *tf)
+{
+	char *sVA = argv[1];
+	uintptr_t VA = strtol(sVA,NULL,16);
+	pte_t * entry = pgdir_walk(kern_pgdir,(void *)VA,0);
+	if (!entry)
+	{
+		cprintf("Page table entry not exist!\n");
+		return -1;
+	}
+	*entry = (*entry ) & (~PTE_U);
+	return 0;
+
+}
+
+int
+mon_change_flags(int argc, char **argv, struct Trapframe *tf)
+{
+	return 1;
+}
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "
