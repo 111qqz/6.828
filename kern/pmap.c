@@ -120,6 +120,7 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
 	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
+	cprintf("kern_pgdir address %08x\n",kern_pgdir);
 	memset(kern_pgdir, 0, PGSIZE);
 	//////////////////////////////////////////////////////////////////////
 	// Recursively insert PD in itself as a page table, to form
@@ -135,9 +136,17 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
+	//cprintf("npages: %08x sizeof(struct PageInfo)*npages %08x\n", npages,sizeof(struct PageInfo)*npages);
 	pages = (struct PageInfo *)boot_alloc(sizeof(struct PageInfo)*npages);
+	//cprintf("pages address [%08x,%08x]\n",pages,pages+sizeof(struct PageInfo)*npages);
 	memset(pages,0,sizeof(struct PageInfo)*npages);
-
+	/*
+	for ( int i = npages-16 ; i < npages ; i++)
+	{
+		struct PageInfo *pginfo = (struct PageInfo *)(pages + i);
+		cprintf("pginfo va:%08x\n",pginfo);
+	}
+	*/
 	//cprintf("141:pgdir[0]:%08x\n",kern_pgdir[0]);
 	//cprintf("page_info_end_VA:%08x\n",pages+sizeof(struct PageInfo)*npages);
 	//n////////////////////////////////////////////////////////////////////
@@ -147,7 +156,6 @@ mem_init(void)
 	// particular, we can now map memory using boot_map_region
 	// or page_insert
 	page_init();
-
 	//cprintf("151::pgdir[0]:%08x\n",kern_pgdir[0]);
 	check_page_free_list(1);
 	check_page_alloc();
@@ -163,9 +171,7 @@ mem_init(void)
 	//    what does "new image at UPAGES" mean
 	// Your code goes here:
 	boot_map_region(kern_pgdir,UPAGES,sizeof(struct PageInfo)*npages,PADDR(pages),PTE_U|PTE_P);
-
 	//cprintf("166:pgdir[0]:%08x\n",kern_pgdir[0]);
-	
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
@@ -181,9 +187,9 @@ mem_init(void)
 	//cprintf("PTSIZE:%08x\n",PTSIZE);
 	//cprintf("max PA:%08x\n",(physaddr_t)(~0));
 	//cprintf("PADDR(bootstack) %08x\n",PADDR(bootstack));
+	cprintf("kernel stack0 %08x kernel stack1:%08x\n",KERNBASE-KSTKSIZE,KERNBASE-2*KSTKSIZE-KSTKGAP);
 	boot_map_region(kern_pgdir,KSTACKTOP-KSTKSIZE,KSTKSIZE,PADDR(bootstack),PTE_W|PTE_P);
 	// boot_map_region(kern_pgdir,KSTACKTOP-2*KSTKSIZE-KSTKGAP,KSTKSIZE,PADDR(bootstack)+(physaddr_t)KSTKSIZE,PTE_W|PTE_P);
-
 	//cprintf("188:pgdir[0]:%08x\n",kern_pgdir[0]);
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -194,16 +200,14 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 	//
-    //for ( int i = PDX(KERNBASE); i < NPDENTRIES ; i++)
-	//	cprintf("pgdir[%d]:%08x\n",i,kern_pgdir[i]);
-	
 	//cprintf("address of pgdir: %08x\n",kern_pgdir);
 	//cprintf("npages*PGSIZE %08x\n",npages*PGSIZE);
 	//cprintf(" 1<<31-KERNBASE %08x\n",(1<<31)-KERNBASE);
 	//大失误！ VA最高是2^32-1,十六进制为0xffffffff,不小心写成了1<<31(2^31)....  
 	boot_map_region(kern_pgdir,KERNBASE,0xffffffff-KERNBASE,0,PTE_W | PTE_P);// kernel pgdir
 	//cprintf("197::pgdir[0]:%08x\n",kern_pgdir[0]);
-
+    //for ( int i = PDX(KERNBASE); i < NPDENTRIES ; i++)
+	//	cprintf("pgdir[%d]:%08x\n",i,kern_pgdir[i]);
 	// pgdir的内容不对，是因为有page没有映射到位。	
 	// for ( int i = PDX(KERNBASE); i < NPDENTRIES ; i++)
 	//	cprintf("pgdir[%d]:%08x\n",i,kern_pgdir[i]);
@@ -469,7 +473,6 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 // Hint: The TA solution is implemented using pgdir_walk, page_remove,
 // and page2pa.
 //
- 
 int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
@@ -503,9 +506,6 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 	//cprintf("check_va2pa:%08x\n",check_va2pa(pgdir,PGSIZE));
 	return 0;
 }
-
-
-
 // Return the page mapped at virtual address 'va'.
 // If pte_store is not zero, then we store in it the address
 // of the pte for this page.  This is used by page_remove and
@@ -520,15 +520,16 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
+	// cprintf(" va in page_lookup :%08x\n",va);
 	pte_t * entry = pgdir_walk( pgdir, va, 0);
 	if (!entry) return NULL;
 	if (pte_store)
 	{
 		*pte_store =  entry;
 	}
+	// cprintf(" entry in page_lookup: %08x\n",*entry); 
 	bool exist = *entry & PTE_P;
 	if (!exist) return NULL;
-
 	physaddr_t pa = PTE_ADDR(*entry);
 	// cprintf("pa in lookup: %08x\n",pa);
 	struct PageInfo* ret = pa2page(pa);

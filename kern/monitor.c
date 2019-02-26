@@ -11,6 +11,7 @@
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 
+#include <kern/pmap.h>   // for challenge 2 in lab2
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
 
@@ -24,7 +25,8 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{"backtrace","Display infomation about the call stack", mon_backtrace }
+	{"backtrace","Display infomation about the call stack", mon_backtrace },
+	{"map"," display the physical mappings that apply to a particular range of virtual addresses",mon_showmappings}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -85,6 +87,46 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 
 
 	return 0;
+}
+
+
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	char * sstartVA = argv[1];
+	char * sendVA = argv[2];
+	cprintf("[%s,%s]\n",sstartVA,sendVA);
+	uintptr_t istartVA = strtol(sstartVA,NULL,16);
+	uintptr_t iendVA = strtol(sendVA,NULL,16);
+	cprintf("int: [%08x,%08x]\n",istartVA,iendVA);
+	int cnt = ((iendVA - istartVA)>>12)&0xFFFFFF;
+	cprintf("cnt %d\n",cnt);
+	cprintf("virtual address   phycisal address  PTE_U  PTE_W  PTE_P\n");
+	for ( int i = 0 ; i < cnt ; i++)
+	{
+		uintptr_t curVA = istartVA + i * 0x1000;
+		cprintf("   %08x   ",curVA);
+		pte_t * entry ;
+		struct PageInfo *pginfo = page_lookup(kern_pgdir,(void *)curVA,&entry);
+		if (!pginfo)
+		{
+			cprintf("       None     ");
+			cprintf("       None ");
+			cprintf("  None");
+			cprintf("  None\n");
+		}
+		else
+		{
+			physaddr_t pa = PTE_ADDR(*entry);
+			cprintf("       %08x    ",pa);
+			cprintf("     %d      %d     %d\n",1-!(*entry&PTE_U),1-!(*entry&PTE_W),1-!(*entry&PTE_P));
+		}
+
+	}	
+			
+		
+	return 0;
+
 }
 
 
