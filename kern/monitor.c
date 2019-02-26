@@ -34,6 +34,7 @@ static struct Command commands[] = {
 	{"setPTE_U","set the flag of PTE_U",mon_setPTE_U},
 	{"clearPTE_U","clear the flag of PTE_U",mon_clearPTE_U},
 	{"change_flags","change the permission",mon_change_flags},
+	{"mem","dump the contents of a range VA/PA address range ",mon_mem}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -100,6 +101,11 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 int
 mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 {
+	if (argc<3)
+	{
+		cprintf("USAGE: map [startVA] [endVA] \n");
+		return -1;
+	}
 	char * sstartVA = argv[1];
 	char * sendVA = argv[2];
 	//cprintf("[%s,%s]\n",sstartVA,sendVA);
@@ -157,10 +163,10 @@ mon_clearPTE_P(int argc, char **argv, struct Trapframe *tf)
 		cprintf("Page table entry not exist!\n");
 		return -1;
 	}
-	cprintf("entry %08x\n",*entry);
-	cprintf(" PTE_p %08x\n",(~PTE_P));
+	//cprintf("entry %08x\n",*entry);
+	//cprintf(" PTE_p %08x\n",(~PTE_P));
 	 *entry = (*entry) & (~PTE_P);
-	cprintf("entry %08x\n",*entry);
+	//cprintf("entry %08x\n",*entry);
 	return 0;
 }
 
@@ -232,6 +238,11 @@ mon_clearPTE_U(int argc, char **argv, struct Trapframe *tf)
 int
 mon_change_flags(int argc, char **argv, struct Trapframe *tf)
 {
+	if (argc<3)
+	{
+		cprintf("USAGE: change_flags [VA] [permission] \n");
+		return -1;
+	}
 	char *sVA = argv[1];
 	char *sPer = argv[2];
 	uintptr_t VA = strtol(sVA,NULL,16);
@@ -246,6 +257,52 @@ mon_change_flags(int argc, char **argv, struct Trapframe *tf)
 	*entry =( (*entry) & (~0x7) ) | Per;
 	return 0;
 }
+
+
+int 
+mon_mem(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc<4)
+	{
+		cprintf("usage: mem [VA/PA(start)]  [VA/PA(end)] P|V \n");
+		return -1;
+	}
+	char *sstartA = argv[1];
+	char *sendA = argv[2];
+	char *type = argv[3];
+	if (type[0]!='P'&&type[0]!='V')
+	{
+		cprintf("usage: mem [VA/PA(start)]  [VA/PA(end)] P|V \n");
+		return -1;
+	}
+
+
+	uintptr_t startVA,endVA;
+	if (type[0]=='P')
+	{
+		startVA = strtol(sstartA,NULL,16) + KERNBASE;
+		endVA = strtol(sendA,NULL,16) + KERNBASE;
+	}
+	else 
+	{
+		startVA = strtol(sstartA,NULL,16);
+		endVA = strtol(sendA,NULL,16);
+	}
+	startVA = ROUNDUP(startVA,4);
+	endVA = ROUNDUP(endVA,4);
+	int cnt = ((endVA - startVA)>>2);;
+	cprintf("startVA: %08x endVA:%08x cnt:%d\n",startVA,endVA,cnt);
+	for ( int i = 0 ; i < cnt ; i++)
+	{
+		void ** cur_VA = (void **)startVA + i;
+		cprintf("[%08x]:%08x\n",cur_VA,*cur_VA);
+	}
+
+	return 0;
+	
+}
+
+
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "

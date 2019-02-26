@@ -23,4 +23,5 @@ int mon_clearPTE_W( int argc, char **argv, struct Trapframe *tf);
 int mon_setPTE_U( int argc, char **argv, struct Trapframe *tf);
 int mon_clearPTE_U( int argc, char **argv, struct Trapframe *tf);
 int mon_change_flags( int argc, char **argv, struct Trapframe *tf);
+int mon_mem(int argc, char **argv,  struct Trapframe *tf);
 #endif	// !JOS_KERN_MONITOR_H
