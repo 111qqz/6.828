@@ -95,13 +95,13 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 {
 	char * sstartVA = argv[1];
 	char * sendVA = argv[2];
-	cprintf("[%s,%s]\n",sstartVA,sendVA);
+	//cprintf("[%s,%s]\n",sstartVA,sendVA);
 	uintptr_t istartVA = strtol(sstartVA,NULL,16);
 	uintptr_t iendVA = strtol(sendVA,NULL,16);
-	cprintf("int: [%08x,%08x]\n",istartVA,iendVA);
+	//cprintf("int: [%08x,%08x]\n",istartVA,iendVA);
 	int cnt = ((iendVA - istartVA)>>12)&0xFFFFFF;
-	cprintf("cnt %d\n",cnt);
-	cprintf("virtual address   phycisal address  PTE_U  PTE_W  PTE_P\n");
+	//cprintf("cnt %d\n",cnt);
+	//cprintf("virtual address   phycisal address  PTE_U  PTE_W  PTE_P\n");
 	for ( int i = 0 ; i < cnt ; i++)
 	{
 		uintptr_t curVA = istartVA + i * 0x1000;
@@ -121,12 +121,8 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 			cprintf("       %08x    ",pa);
 			cprintf("     %d      %d     %d\n",1-!(*entry&PTE_U),1-!(*entry&PTE_W),1-!(*entry&PTE_P));
 		}
-
 	}	
-			
-		
 	return 0;
-
 }
 
 
