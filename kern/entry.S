@@ -23,7 +23,7 @@
 #define CHECKSUM (-(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS))
 
 ###################################################################
-# entry point
+# entry poin
 ###################################################################
 
 .text
