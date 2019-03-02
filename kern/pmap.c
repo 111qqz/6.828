@@ -144,6 +144,7 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+	envs = (struct Env *)boot_alloc(sizeof(struct Env*)*NENV);
 
 	//////////////////////////////////////////////////////////////////////
 	//cprintf("npages: %08x sizeof(struct PageInfo)*npages %08x\n", npages,sizeof(struct PageInfo)*npages);
@@ -180,7 +181,7 @@ mem_init(void)
 	//    - pages itself -- kernel RW, user NONE
 	//    what does "new image at UPAGES" mean
 	// Your code goes here:
-	boot_map_region(kern_pgdir,UPAGES,sizeof(struct PageInfo)*npages,PADDR(pages),PTE_U|PTE_P);
+	boot_map_region(kern_pgdir, UPAGES,sizeof(struct PageInfo) * npages, PADDR(pages), PTE_U | PTE_P);
 	//cprintf("166:pgdir[0]:%08x\n",kern_pgdir[0]);
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
@@ -189,6 +190,7 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	boot_map_region(kern_pgdir, UENVS, sizeof(struct Env) * NENV, PADDR(envs), PTE_U | PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
