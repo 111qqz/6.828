@@ -116,9 +116,19 @@ env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
+	cprintf("env_init start\n");
+	for ( int i = NENV-1 ; i >= 0 ;  i--)
+	{
+		envs[i].env_id = 0;
+		envs[i].env_status = ENV_FREE;
+		envs[i].env_link = env_free_list;
+		env_free_list = &envs[i];
+	}
 
 	// Per-CPU part of the initialization
+	cprintf("env_init before init_precpu\n");
 	env_init_percpu();
+	cprintf("env_init end\n");
 }
 
 // Load GDT and segment descriptors.
@@ -155,6 +165,8 @@ env_init_percpu(void)
 static int
 env_setup_vm(struct Env *e)
 {
+
+	cprintf("env_setup_vm start\n");
 	int i;
 	struct PageInfo *p = NULL;
 
@@ -179,10 +191,17 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+	// 去看一下string.h，里面有些函数可能有用
+	p->pp_ref++;
+	e->env_pgdir = (pde_t *)KADDR(page2pa(p));
+	memcpy(e->env_pgdir,kern_pgdir,PGSIZE);
+	// 不知道有memcpy函数可以用...orz
 
+	cprintf("PA e->env_pgdir:%08x\n",PADDR(e->env_pgdir));
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
 	e->env_pgdir[PDX(UVPT)] = PADDR(e->env_pgdir) | PTE_P | PTE_U;
+	cprintf("env_setup_vim  end\n");
 
 	return 0;
 }
@@ -198,6 +217,7 @@ env_setup_vm(struct Env *e)
 int
 env_alloc(struct Env **newenv_store, envid_t parent_id)
 {
+	cprintf("env_alloc start\n");
 	int32_t generation;
 	int r;
 	struct Env *e;
@@ -260,11 +280,30 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 static void
 region_alloc(struct Env *e, void *va, size_t len)
 {
+	cprintf("region_alloc start\n");
 	// LAB 3: Your code here.
 	// (But only if you need it for load_icode.)
-	//
+	// use page_insert
+	uintptr_t VA = ROUNDDOWN((uintptr_t)va,PGSIZE);
+	uintptr_t VA_end = ROUNDUP((uintptr_t)(va + len),PGSIZE);
+	struct PageInfo *pginfo = NULL;
+	for (; VA < VA_end ; VA+=PGSIZE)
+	{
+		if (!(pginfo=page_alloc(ALLOC_ZERO)))
+		{
+			panic("page_alloc in region_alloc failed!");
+		}
+		int ret = page_insert(e->env_pgdir, pginfo, (void *)VA, PTE_U | PTE_W | PTE_P);
+		if (ret)
+		{
+			panic("page insert failed %e",ret);
+		}
+	}
+	cprintf("rgion_alloc end\n");
+	
 	// Hint: It is easier to use region_alloc if the caller can pass
 	//   'va' and 'len' values that are not page-aligned.
+	//
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
 }
@@ -294,6 +333,7 @@ region_alloc(struct Env *e, void *va, size_t len)
 static void
 load_icode(struct Env *e, uint8_t *binary)
 {
+	cprintf("load icode start\n");
 	// Hints:
 	//  Load each program segment into virtual memory
 	//  at the address specified in the ELF segment header.
@@ -305,6 +345,11 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  ph->p_va.  Any remaining memory bytes should be cleared to zero.
 	//  (The ELF header should have ph->p_filesz <= ph->p_memsz.)
 	//  Use functions from the previous lab to allocate and map pages.
+	// 
+	//	question: how to copy memory?   for-loop and assgin?
+	//	// no! use memcpy in string.h
+	//	use what functions in lab2?  I first want to use boot_map_region,but found it's not decleared in pmap.h
+	//	So maybe the right choice is page_insert? But what is the address is not page-aligned?
 	//
 	//  All page protection bits should be user read/write for now.
 	//  ELF segments are not necessarily page-aligned, but you can
@@ -312,6 +357,7 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  the same virtual page.
 	//
 	//  You may find a function like region_alloc useful.
+	//  Q: how to use region_alloc? 
 	//
 	//  Loading the segments is much simpler if you can move data
 	//  directly into the virtual addresses stored in the ELF binary.
@@ -323,10 +369,41 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  What?  (See env_run() and env_pop_tf() below.)
 
 	// LAB 3: Your code here.
+	struct Elf * elf = (struct Elf *)binary;
+	cprintf("elf->e_magic :%08x\n",elf->e_magic);
+	if (elf->e_magic != ELF_MAGIC)
+	{
+		panic("invalid ELF file!");
+	}
+	struct Proghdr *ph,*eph;
+	ph = (struct Proghdr *)((uint8_t *)elf + elf->e_phoff);
+	eph = ph + elf->e_phnum;
+	cprintf("ph: %08x  eph:%08x\n",ph,eph);
+	cprintf("binary:%08x p_offset:%08x filesz:%08x\n",binary,ph->p_offset,ph->p_filesz);
+	lcr3(PADDR(e->env_pgdir));
+	
+	for (; ph < eph ; ph++)
+	{
+		//cprintf("ph->ptype: %d\n",ph->p_type);
+		// ph->ptype should be 1 instead of 0 .
+		if (ph->p_type != ELF_PROG_LOAD) continue;
+		uint8_t * src = binary + ph->p_offset;
+		uint8_t * dst  =  (uint8_t *)ph->p_va;
+		region_alloc(e,(void *)dst, ph->p_memsz);
+		memcpy(dst,src,ph->p_filesz);
+		// use memcpy .
+		memset(dst  + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
+	}
+	e->env_tf.tf_eip = elf->e_entry;
+	lcr3(PADDR(kern_pgdir));
+	// lcr3 is too hard for me...
+
+	cprintf("load_icode before env_run\n");	
+	//env_run(e);
 
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
-
+	region_alloc(e, (void*)(USTACKTOP - PGSIZE), PGSIZE);
 	// LAB 3: Your code here.
 }
 
@@ -340,9 +417,23 @@ load_icode(struct Env *e, uint8_t *binary)
 void
 env_create(uint8_t *binary, enum EnvType type)
 {
+	cprintf("env_create start\n");
 	// LAB 3: Your code here.
-}
+	struct Env *env;
+	int ret = env_alloc( &env, 0);
+	if (ret)
+	{
+		panic("env_alloc:%e", ret);
+	}
+	
+	cprintf("env_create before load_icode\n");
 
+	env->env_type = type;
+	load_icode(env, binary);
+	env_run(env);
+
+}
+        
 //
 // Frees env e and all memory it uses.
 //
@@ -439,6 +530,7 @@ env_pop_tf(struct Trapframe *tf)
 void
 env_run(struct Env *e)
 {
+	cprintf("env_run start\n");
 	// Step 1: If this is a context switch (a new environment is running):
 	//	   1. Set the current environment (if any) back to
 	//	      ENV_RUNNABLE if it is ENV_RUNNING (think about
@@ -457,6 +549,25 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
+	if (curenv)
+	{
+		if(curenv->env_status == ENV_RUNNING)
+		{
+			curenv->env_status = ENV_RUNNABLE;
+		}
+	}
+	cprintf("miao 1 in env_run\n");
+	curenv = e;
+	curenv->env_status = ENV_RUNNING;
+	curenv->env_runs++;
+	cprintf(" miao 2 in env_run\n");
+	// env_pgdir[0] == 0, which is wrong.
+	cprintf("env_run curenv->env_pgdir :%08x\n",curenv->env_pgdir[PDX(UVPT)]);
+	lcr3(PADDR(curenv->env_pgdir));
+	cprintf("miao 3 in env_run\n");
+	
+	env_pop_tf(&curenv->env_tf);
+	cprintf("miao 4 in env_run\n");
 
 	panic("env_run not yet implemented");
 }
